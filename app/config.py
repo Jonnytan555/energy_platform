@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
 
+    AGSI_API_KEY: str
+    ALSI_API_KEY: str 
+
     class Config:
         env_file = ".env"
 

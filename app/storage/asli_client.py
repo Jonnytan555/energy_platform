@@ -1,14 +1,13 @@
-import asyncio
 import pandas as pd
 from app.utils.http import safe_get
 from app.config import settings
 from app.utils.cache import async_ttl_cache
 
-BASE_URL = "https://agsi.gie.eu/api/data"
+BASE_URL = "https://alsi.gie.eu/api/data"
 
 @async_ttl_cache(ttl=3600, max_size=32)
-async def fetch_agsi_timeseries(country: str = "EU") -> pd.DataFrame:
-    headers = {"x-key": settings.AGSI_API_KEY}
+async def fetch_alsi_timeseries(country: str = "EU") -> pd.DataFrame:
+    headers = {"x-key": settings.ALSI_API_KEY}
     params = {"size": 500}
 
     if country.upper() == "EU":
@@ -37,50 +36,44 @@ async def fetch_agsi_timeseries(country: str = "EU") -> pd.DataFrame:
         page += 1
 
     df = pd.DataFrame(all_rows)
-
     return _transform(df)
 
 
 def _transform(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Cleans and normalises AGSI timeseries output.
-    Ensures all numeric fields are floats and dates sorted.
-    """
 
-    # convert date
+    # Fix date column
     df["date"] = pd.to_datetime(df["gasDayStart"], errors="coerce")
 
-    # rename columns to pythonic names
-    df = df.rename(columns={
-        "gasInStorage": "gas_in_storage_gwh",
-        "workingGasVolume": "working_gas_gwh",
-        "full": "full_pct",
-    })
+    # Flatten nested fields
+    if "inventory" in df.columns:
+        df["lng_storage_gwh"] = pd.to_numeric(df["inventory"].apply(lambda x: x.get("gwh")), errors="coerce")
 
-    # numeric cleaning
+    if "dtmi" in df.columns:
+        df["dtmi_gwh"] = pd.to_numeric(df["dtmi"].apply(lambda x: x.get("gwh")), errors="coerce")
+
+    # Convert simple numeric fields
     numeric_cols = [
-        "gas_in_storage_gwh",
-        "injection",
-        "withdrawal",
-        "working_gas_gwh",
-        "full_pct",
-        "trend",
+        "sendOut",
+        "dtrs",
+        "contractedCapacity",
+        "availableCapacity",
     ]
 
-    for c in numeric_cols:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
+    # Sort timeseries
     df = df.sort_values("date")
 
     df = df.fillna("").replace("", None)
 
     return df[[
         "date",
-        "gas_in_storage_gwh",
-        "injection",
-        "withdrawal",
-        "working_gas_gwh",
-        "full_pct",
-        "trend",
+        "lng_storage_gwh",
+        "sendOut",
+        "dtmi_gwh",
+        "dtrs",
+        "contractedCapacity",
+        "availableCapacity",
     ]]

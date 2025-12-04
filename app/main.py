@@ -1,17 +1,25 @@
 from fastapi import FastAPI
+
 from app.storage.storage_router import router as storage_router
-from app.curves.curve_router import router as curve_router
+from app.curves.curves_router import router as curves_router
 from app.regression.regression_router import router as regression_router
-from app.routers import users, auth
+from app.shipping.shipping_router import router as shipping_router
+from app.market.market_router import router as market_router
+from app.lng.lng_router import router as lng_router
 
-app = FastAPI(title="Energy API", version="1.1")
+app = FastAPI(
+    title="Energy Analytics Platform",
+    version="0.1.0"
+)
 
-app.include_router(users.router)
-app.include_router(auth.router)
 app.include_router(storage_router)
-app.include_router(curve_router)
+app.include_router(curves_router)
 app.include_router(regression_router)
+app.include_router(shipping_router)
+app.include_router(market_router)
+app.include_router(lng_router)
+
 
 @app.get("/")
-async def root():
-    return {"message": "Energy API running with Storage + Curves + Regression"}
+def root():
+    return {"message": "Energy Platform Running"}

@@ -1,34 +1,19 @@
-import polars as pl
+import pandas as pd
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score
+import numpy as np
 
+async def run_regression():
 
-class GasRegressionService:
+    df = pd.DataFrame({
+        "HH": [2.1, 2.8, 3.0, 3.5],
+        "TTF": [25.0, 26.1, 27.4, 29.0]
+    })
 
-    async def run_regression(self, df: pl.DataFrame):
-        """
-        df columns:
-        HH, JKM, EUA, FX, TTF
-        """
+    model = LinearRegression()
+    model.fit(df[["HH"]], df["TTF"])
 
-        X = df.select(["HH", "JKM", "EUA", "FX"]).to_numpy()
-        y = df["TTF"].to_numpy()
-
-        model = LinearRegression()
-        model.fit(X, y)
-
-        preds = model.predict(X)
-        r2 = r2_score(y, preds)
-
-        return {
-            "coefficients": {
-                "HH_beta": float(model.coef_[0]),
-                "JKM_beta": float(model.coef_[1]),
-                "EUA_beta": float(model.coef_[2]),
-                "FX_beta": float(model.coef_[3]),
-            },
-            "intercept": float(model.intercept_),
-            "r2": float(r2),
-            "predictions": preds.tolist()
-        }
-
+    return {
+        "coef": float(model.coef_[0]),
+        "intercept": float(model.intercept_),
+        "r2": float(model.score(df[["HH"]], df["TTF"]))
+    }
