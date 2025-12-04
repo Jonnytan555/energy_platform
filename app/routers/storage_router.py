@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from app.storage.agsi_client import fetch_agsi_timeseries
-from app.storage.asli_client import fetch_alsi_timeseries
+from app.storage.alsi_client import fetch_alsi_timeseries
 
 router = APIRouter(prefix="/storage", tags=["storage"])
 

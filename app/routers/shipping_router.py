@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.shipping.ais_service import estimate_eta
-from .shipping_service import get_shipping_status
+from ..shipping.shipping_service import get_shipping_status
 
 router = APIRouter(prefix="/shipping", tags=["Shipping"])
 

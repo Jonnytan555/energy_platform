@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from .market_service import get_market_snapshot
+from ..market.market_service import get_market_snapshot
 
 router = APIRouter()
 

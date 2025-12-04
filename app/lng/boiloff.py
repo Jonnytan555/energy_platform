@@ -1,11 +1,15 @@
-import pandas as pd
+def boiloff_loss_mmbtu(days: float, bor_rate: float = 0.001, volume_m3: float = 170000):
+    """
+    Computes total LNG boil-off loss in MMBtu.
 
-def boiloff_loss_mmbtu(
-    voyage_days: float,
-    daily_bor=0.10 / 100,  # 0.10% per day typical XDF
-    cargo_mmbtu=170_000 * 52,
-):
+    Parameters:
+        days: number of voyage days
+        bor_rate: boil-off rate (0.1%/day default)
+        volume_m3: LNG tank volume in cubic meters
+
+    Using an energy density of 22.5 MMBtu per ton-equivalent LNG.
     """
-    Returns boil-off volume lost (MMBtu) during voyage.
-    """
-    return cargo_mmbtu * (daily_bor * voyage_days)
+    energy_density_mmbtu = 22.5
+
+    total_loss = bor_rate * days * volume_m3 * energy_density_mmbtu
+    return total_loss
