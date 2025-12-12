@@ -1,27 +1,21 @@
 from __future__ import annotations
+
+import asyncio
 import sys
 from pathlib import Path
 from logging.config import fileConfig
-
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import pool
+from sqlalchemy.ext.asyncio import create_async_engine
 
-# Add app directory
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(BASE_DIR))
 
-# Import settings + metadata
-from app.config import settings
-from app.models import Base
+from app.database import Base, DATABASE_URL
+import app.models.user
+import app.models.storage
 
 config = context.config
-
-# Override sqlalchemy.url
-config.set_main_option(
-    "sqlalchemy.url",
-    f"postgresql+psycopg2://{settings.DATABASE_USER}:{settings.DATABASE_PASSWORD}"
-    f"@{settings.DATABASE_HOSTNAME}:{settings.DATABASE_PORT}/{settings.DATABASE_NAME}"
-)
 
 # Logging
 if config.config_file_name is not None:
@@ -31,33 +25,41 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline():
-    url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url,
+        url=DATABASE_URL,
         target_metadata=target_metadata,
-        literal_binds=True
+        literal_binds=True,
+        compare_type=True,
     )
+
     with context.begin_transaction():
         context.run_migrations()
 
 
-def run_migrations_online():
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool
+def do_run_migrations(connection):
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
     )
 
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata
-        )
-        with context.begin_transaction():
-            context.run_migrations()
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+async def run_migrations_online():
+    connectable = create_async_engine(
+        DATABASE_URL,
+        poolclass=pool.NullPool,
+    )
+
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
+
+    await connectable.dispose()
 
 
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    asyncio.run(run_migrations_online())
