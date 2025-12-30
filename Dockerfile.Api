@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y build-essential libpq-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install deps first (cache-friendly)
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -U pip \
+  && pip install --no-cache-dir -r /app/requirements.txt
+
+# install private wheel(s)
+COPY wheels/ /wheels/
+RUN pip install --no-cache-dir /wheels/*.whl
+
+# Copy app code
+COPY . /app
+
+# optional sanity check
+RUN python -c "import alembic; print('alembic ok')" \
+ && python -c "import celery; print('celery ok')"
+
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host=0.0.0.0", "--port=8000"]

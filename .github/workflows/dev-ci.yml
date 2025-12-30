@@ -1,0 +1,50 @@
+# .github/workflows/dev-ci.yml
+name: CI (dev)
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - feature/**
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: |
+          pytest -q || echo "No tests yet"
+
+      - name: Lint (flake8, optional)
+        run: |
+          pip install flake8
+          flake8 app || echo "Lint warnings (non-blocking)"
+
+      # Optional: make sure Dockerfiles build
+      - name: Build API image
+        run: |
+          docker build -f Dockerfile.Api -t energy-platform-api:test .
+
+      - name: Build Worker image
+        run: |
+          docker build -f Dockerfile.Worker -t energy-platform-worker:test .
+
+      - name: Build Nginx image
+        run: |
+          docker build -f Dockerfile.nginx -t energy-platform-nginx:test .

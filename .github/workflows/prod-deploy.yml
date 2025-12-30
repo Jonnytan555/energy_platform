@@ -1,0 +1,98 @@
+# .github/workflows/prod-deploy.yml
+name: Deploy (prod)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write   # needed for GHCR
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}/energy_platform
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: meta
+        run: echo "tag=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" \
+             | docker login $REGISTRY -u ${{ github.actor }} --password-stdin
+
+      - name: Build & push API
+        run: |
+          docker build -f Dockerfile.Api \
+            -t $REGISTRY/$IMAGE_NAMESPACE/api:${{ steps.meta.outputs.tag }} \
+            -t $REGISTRY/$IMAGE_NAMESPACE/api:latest .
+          docker push $REGISTRY/$IMAGE_NAMESPACE/api:${{ steps.meta.outputs.tag }}
+          docker push $REGISTRY/$IMAGE_NAMESPACE/api:latest
+
+      - name: Build & push Worker
+        run: |
+          docker build -f Dockerfile.Worker \
+            -t $REGISTRY/$IMAGE_NAMESPACE/worker:${{ steps.meta.outputs.tag }} \
+            -t $REGISTRY/$IMAGE_NAMESPACE/worker:latest .
+          docker push $REGISTRY/$IMAGE_NAMESPACE/worker:${{ steps.meta.outputs.tag }}
+          docker push $REGISTRY/$IMAGE_NAMESPACE/worker:latest
+
+      - name: Build & push Nginx
+        run: |
+          docker build -f Dockerfile.nginx \
+            -t $REGISTRY/$IMAGE_NAMESPACE/nginx:${{ steps.meta.outputs.tag }} \
+            -t $REGISTRY/$IMAGE_NAMESPACE/nginx:latest .
+          docker push $REGISTRY/$IMAGE_NAMESPACE/nginx:${{ steps.meta.outputs.tag }}
+          docker push $REGISTRY/$IMAGE_NAMESPACE/nginx:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (just for scripts)
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p ${{ secrets.PROD_SSH_PORT }} ${{ secrets.PROD_SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy via SSH
+        env:
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+        run: |
+          ssh -p ${{ secrets.PROD_SSH_PORT }} ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }} '
+            set -e
+            cd /opt/energy_platform
+
+            echo "Pulling images..."
+            REGISTRY=ghcr.io
+            IMAGE_NAMESPACE=${GITHUB_REPOSITORY_OWNER}/energy_platform
+
+            IMAGE_TAG='"$IMAGE_TAG"'
+
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+
+            # run migrations (if you have Alembic wired)
+            docker compose -f docker-compose.prod.yml run --rm api \
+              alembic upgrade head
+
+            # health check
+            curl -f http://localhost/health || (echo "Health check failed" && exit 1)
+          '

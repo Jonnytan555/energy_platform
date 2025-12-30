@@ -1,11 +1,14 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from app.startup.scraper_registry import register_scrapers
+from app.config import settings
 
 register_scrapers()
 
-from app.routers import auth_router, storage_router, users_router
+from app.routers import auth_router, health_router, storage_router, tasks_router
 
 app = FastAPI(
     title="Energy Analytics Platform",
@@ -15,15 +18,16 @@ app = FastAPI(
 
 app.include_router(storage_router)
 app.include_router(auth_router)
+app.include_router(health_router)
+
+if settings.CELERY_ENABLED:
+    app.include_router(tasks_router)
+
+origins = os.getenv("CORS_ORIGINS", "http://localhost").split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-    ],
+    allow_origins=settings.cors_list(), # type: ignore
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,7 +38,6 @@ app.mount(
     StaticFiles(directory="frontend/dist", html=True),
     name="frontend",
 )
-
 
 @app.get("/")
 def root():

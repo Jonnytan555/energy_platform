@@ -1,7 +1,6 @@
-# app/utils/http.py
-
 import asyncio
 import httpx
+
 from retry import retry
 
 

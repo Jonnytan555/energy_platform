@@ -1,12 +1,16 @@
 import asyncio
+import logging
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
-
 from scraper.factory.scraper_factory import ScraperFactory
 from app.auth.dependencies import get_current_user
 from app.database import get_db
 from app.models import AgsiTimeseries, AlsiTimeseries
+from app.config import settings
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/storage", tags=["Storage"])
 
@@ -28,6 +32,13 @@ async def scrape_agsi(
     pages: int | None = Query(None, ge=1),
     current_user=Depends(get_current_user),
 ):
+    if settings.CELERY_ENABLED:
+        from app.tasks.storage_tasks import scrape_agsi_task
+
+        job = scrape_agsi_task.delay(zone=zone, pages=pages)
+        log.info("Queued tasks.scrape_agsi task_id=%s zone=%s pages=%s", job.id, zone, pages)
+        return {"queued": True, "task_id": job.id}
+
     scraper = ScraperFactory.create("agsi_scrape", zone)
     df = await scraper.scrape(pages_to_fetch=pages)
     return df.to_dict(orient="records")
@@ -85,6 +96,13 @@ async def scrape_alsi(
     country: str = "EU",
     current_user=Depends(get_current_user),
 ):
+    if settings.CELERY_ENABLED:
+        from app.tasks.storage_tasks import scrape_alsi_task
+
+        job = scrape_alsi_task.delay(country=country)
+        log.info("Queued tasks.scrape_alsi task_id=%s country=%s", job.id, country)
+        return {"queued": True, "task_id": job.id}
+
     scraper = ScraperFactory.create("alsi_scrape", country)
     df = await asyncio.to_thread(scraper.run)
     return {"rows_persisted": len(df), "data": df.to_dict(orient="records")}
