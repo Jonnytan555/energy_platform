@@ -91,9 +91,12 @@ jobs:
         env:
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
         run: |
-          ssh -p "${{ secrets.PROD_SSH_PORT }}" "${{ secrets.PROD_SSH_USER }}"@"${{ secrets.PROD_SSH_HOST }}" '
+          ssh -p "${{ secrets.PROD_SSH_PORT }}" \
+              "${{ secrets.PROD_SSH_USER }}"@"${{ secrets.PROD_SSH_HOST }}" bash << 'EOF'
             set -e
-            cd /opt/energy_platform
+
+            # Go to your repo on the server
+            cd /home/jedwards1/energy_platform
 
             echo "Pulling images with docker compose..."
             docker compose -f docker-compose.prod.yml pull
@@ -105,4 +108,4 @@ jobs:
 
             echo "Health check..."
             curl -f http://localhost/health || (echo "Health check failed" && exit 1)
-          '
+          EOF
