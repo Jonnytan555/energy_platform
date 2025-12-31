@@ -109,3 +109,4 @@ jobs:
             echo "Health check..."
             curl -f http://localhost/health || (echo "Health check failed" && exit 1)
           EOF
+
