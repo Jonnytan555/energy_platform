@@ -14,6 +14,10 @@ env:
   IMAGE_NAMESPACE: ${{ github.repository_owner }}/energy_platform
 
 jobs:
+
+  #############################################################################
+  # BUILD & PUSH CONTAINER IMAGES TO GHCR
+  #############################################################################
   build-and-push:
     runs-on: ubuntu-latest
 
@@ -39,6 +43,7 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" \
              | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
 
+      # ---------------- API ----------------
       - name: Build & push API
         run: |
           IMAGE_NS="${{ steps.img_ns.outputs.value }}"
@@ -47,9 +52,11 @@ jobs:
           docker build -f Dockerfile.Api \
             -t "$REGISTRY/$IMAGE_NS/api:$TAG" \
             -t "$REGISTRY/$IMAGE_NS/api:latest" .
+
           docker push "$REGISTRY/$IMAGE_NS/api:$TAG"
           docker push "$REGISTRY/$IMAGE_NS/api:latest"
 
+      # ---------------- Worker ----------------
       - name: Build & push Worker
         run: |
           IMAGE_NS="${{ steps.img_ns.outputs.value }}"
@@ -58,9 +65,11 @@ jobs:
           docker build -f Dockerfile.Worker \
             -t "$REGISTRY/$IMAGE_NS/worker:$TAG" \
             -t "$REGISTRY/$IMAGE_NS/worker:latest" .
+
           docker push "$REGISTRY/$IMAGE_NS/worker:$TAG"
           docker push "$REGISTRY/$IMAGE_NS/worker:latest"
 
+      # ---------------- Nginx ----------------
       - name: Build & push Nginx
         run: |
           IMAGE_NS="${{ steps.img_ns.outputs.value }}"
@@ -69,27 +78,50 @@ jobs:
           docker build -f Dockerfile.nginx \
             -t "$REGISTRY/$IMAGE_NS/nginx:$TAG" \
             -t "$REGISTRY/$IMAGE_NS/nginx:latest" .
+
           docker push "$REGISTRY/$IMAGE_NS/nginx:$TAG"
           docker push "$REGISTRY/$IMAGE_NS/nginx:latest"
 
+
+  #############################################################################
+  # DEPLOY TO DIGITAL OCEAN (SSH + docker compose pull/up)
+  #############################################################################
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout (just for scripts)
+      - name: Checkout (for scripts only)
         uses: actions/checkout@v4
 
+      #########################################################################
+      # SSH Key Setup
+      #########################################################################
       - name: Setup SSH key
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p "${{ secrets.PROD_SSH_PORT }}" "${{ secrets.PROD_SSH_HOST }}" >> ~/.ssh/known_hosts
+          set -e
 
+          mkdir -p ~/.ssh
+
+          # Write private key from GitHub secret
+          printf '%s\n' "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          echo "Key file written:"
+          ls -la ~/.ssh
+
+          echo "Adding server to known_hosts..."
+          ssh-keyscan -T 10 -p "${{ secrets.PROD_SSH_PORT }}" \
+            "${{ secrets.PROD_SSH_HOST }}" >> ~/.ssh/known_hosts \
+            || echo "ssh-keyscan failed (non fatal)"
+
+      #########################################################################
+      # SSH → Pull images → Restart → Migrate → Health Check
+      #########################################################################
       - name: Deploy via SSH
         env:
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+
         run: |
           ssh -i ~/.ssh/deploy_key \
               -o IdentitiesOnly=yes \
@@ -97,17 +129,20 @@ jobs:
               "${{ secrets.PROD_SSH_USER }}"@"${{ secrets.PROD_SSH_HOST }}" bash << 'EOF'
             set -e
 
-            # Go to your repo on the server
             cd /home/jedwards1/energy_platform
 
-            echo "Pulling images with docker compose..."
+            echo "Pulling images..."
             docker compose -f docker-compose.prod.yml pull
+
+            echo "Starting services..."
             docker compose -f docker-compose.prod.yml up -d
 
-            echo "Running migrations..."
+            echo "Running DB migrations..."
             docker compose -f docker-compose.prod.yml run --rm api \
               alembic upgrade head
 
-            echo "Health check..."
-            curl -f http://localhost/health || (echo "Health check failed" && exit 1)
+            echo "Performing health check..."
+            curl -f http://localhost/health || (echo "Health check FAILED" && exit 1)
+
+            echo "Deploy complete ✔"
           EOF
