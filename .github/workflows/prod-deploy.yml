@@ -83,15 +83,17 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "${{ secrets.PROD_SSH_PORT }}" "${{ secrets.PROD_SSH_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Deploy via SSH
         env:
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
         run: |
-          ssh -p "${{ secrets.PROD_SSH_PORT }}" \
+          ssh -i ~/.ssh/deploy_key \
+              -o IdentitiesOnly=yes \
+              -p "${{ secrets.PROD_SSH_PORT }}" \
               "${{ secrets.PROD_SSH_USER }}"@"${{ secrets.PROD_SSH_HOST }}" bash << 'EOF'
             set -e
 
@@ -109,4 +111,3 @@ jobs:
             echo "Health check..."
             curl -f http://localhost/health || (echo "Health check failed" && exit 1)
           EOF
-
