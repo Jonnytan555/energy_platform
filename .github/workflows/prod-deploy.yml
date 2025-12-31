@@ -91,12 +91,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout (for scripts only)
+      - name: Checkout (just for scripts)
         uses: actions/checkout@v4
 
-      #########################################################################
-      # SSH Key Setup
-      #########################################################################
       - name: Setup SSH key
         run: |
           set -e
@@ -110,21 +107,18 @@ jobs:
           echo "Key file written:"
           ls -la ~/.ssh
 
-          echo "Adding server to known_hosts..."
+          echo "Adding server to known_hosts (best-effort)..."
           ssh-keyscan -T 10 -p "${{ secrets.PROD_SSH_PORT }}" \
             "${{ secrets.PROD_SSH_HOST }}" >> ~/.ssh/known_hosts \
             || echo "ssh-keyscan failed (non fatal)"
 
-      #########################################################################
-      # SSH → Pull images → Restart → Migrate → Health Check
-      #########################################################################
       - name: Deploy via SSH
         env:
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
-
         run: |
           ssh -i ~/.ssh/deploy_key \
               -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=no \
               -p "${{ secrets.PROD_SSH_PORT }}" \
               "${{ secrets.PROD_SSH_USER }}"@"${{ secrets.PROD_SSH_HOST }}" bash << 'EOF'
             set -e
@@ -146,3 +140,4 @@ jobs:
 
             echo "Deploy complete ✔"
           EOF
+
