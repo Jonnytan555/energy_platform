@@ -1,4 +1,3 @@
-# .github/workflows/prod-deploy.yml
 name: Deploy (prod)
 
 on:
@@ -8,7 +7,7 @@ on:
 
 permissions:
   contents: read
-  packages: write   # needed for GHCR
+  packages: write
 
 env:
   REGISTRY: ghcr.io
@@ -27,35 +26,51 @@ jobs:
 
       - name: Set image tag
         id: meta
-        run: echo "tag=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+        run: echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute lowercase image namespace
+        id: img_ns
+        run: |
+          ns="${IMAGE_NAMESPACE}"
+          ns_lc="$(echo "$ns" | tr '[:upper:]' '[:lower:]')"
+          echo "value=$ns_lc" >> "$GITHUB_OUTPUT"
 
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" \
-             | docker login $REGISTRY -u ${{ github.actor }} --password-stdin
+             | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
 
       - name: Build & push API
         run: |
+          IMAGE_NS="${{ steps.img_ns.outputs.value }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+
           docker build -f Dockerfile.Api \
-            -t $REGISTRY/$IMAGE_NAMESPACE/api:${{ steps.meta.outputs.tag }} \
-            -t $REGISTRY/$IMAGE_NAMESPACE/api:latest .
-          docker push $REGISTRY/$IMAGE_NAMESPACE/api:${{ steps.meta.outputs.tag }}
-          docker push $REGISTRY/$IMAGE_NAMESPACE/api:latest
+            -t "$REGISTRY/$IMAGE_NS/api:$TAG" \
+            -t "$REGISTRY/$IMAGE_NS/api:latest" .
+          docker push "$REGISTRY/$IMAGE_NS/api:$TAG"
+          docker push "$REGISTRY/$IMAGE_NS/api:latest"
 
       - name: Build & push Worker
         run: |
+          IMAGE_NS="${{ steps.img_ns.outputs.value }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+
           docker build -f Dockerfile.Worker \
-            -t $REGISTRY/$IMAGE_NAMESPACE/worker:${{ steps.meta.outputs.tag }} \
-            -t $REGISTRY/$IMAGE_NAMESPACE/worker:latest .
-          docker push $REGISTRY/$IMAGE_NAMESPACE/worker:${{ steps.meta.outputs.tag }}
-          docker push $REGISTRY/$IMAGE_NAMESPACE/worker:latest
+            -t "$REGISTRY/$IMAGE_NS/worker:$TAG" \
+            -t "$REGISTRY/$IMAGE_NS/worker:latest" .
+          docker push "$REGISTRY/$IMAGE_NS/worker:$TAG"
+          docker push "$REGISTRY/$IMAGE_NS/worker:latest"
 
       - name: Build & push Nginx
         run: |
+          IMAGE_NS="${{ steps.img_ns.outputs.value }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+
           docker build -f Dockerfile.nginx \
-            -t $REGISTRY/$IMAGE_NAMESPACE/nginx:${{ steps.meta.outputs.tag }} \
-            -t $REGISTRY/$IMAGE_NAMESPACE/nginx:latest .
-          docker push $REGISTRY/$IMAGE_NAMESPACE/nginx:${{ steps.meta.outputs.tag }}
-          docker push $REGISTRY/$IMAGE_NAMESPACE/nginx:latest
+            -t "$REGISTRY/$IMAGE_NS/nginx:$TAG" \
+            -t "$REGISTRY/$IMAGE_NS/nginx:latest" .
+          docker push "$REGISTRY/$IMAGE_NS/nginx:$TAG"
+          docker push "$REGISTRY/$IMAGE_NS/nginx:latest"
 
   deploy:
     needs: build-and-push
@@ -70,29 +85,24 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -p ${{ secrets.PROD_SSH_PORT }} ${{ secrets.PROD_SSH_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -p "${{ secrets.PROD_SSH_PORT }}" "${{ secrets.PROD_SSH_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Deploy via SSH
         env:
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
         run: |
-          ssh -p ${{ secrets.PROD_SSH_PORT }} ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }} '
+          ssh -p "${{ secrets.PROD_SSH_PORT }}" "${{ secrets.PROD_SSH_USER }}"@"${{ secrets.PROD_SSH_HOST }}" '
             set -e
             cd /opt/energy_platform
 
-            echo "Pulling images..."
-            REGISTRY=ghcr.io
-            IMAGE_NAMESPACE=${GITHUB_REPOSITORY_OWNER}/energy_platform
-
-            IMAGE_TAG='"$IMAGE_TAG"'
-
+            echo "Pulling images with docker compose..."
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
 
-            # run migrations (if you have Alembic wired)
+            echo "Running migrations..."
             docker compose -f docker-compose.prod.yml run --rm api \
               alembic upgrade head
 
-            # health check
+            echo "Health check..."
             curl -f http://localhost/health || (echo "Health check failed" && exit 1)
           '
