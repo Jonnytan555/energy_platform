@@ -1,0 +1,95 @@
+# -----------------------
+# Python
+# -----------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+# virtualenvs
+.venv/
+venv/
+env/
+
+# pytest / coverage
+.coverage
+htmlcov/
+.cache/
+
+# --------------------------------
+# FastAPI / Alembic
+# --------------------------------
+alembic/*.log
+alembic/versions/__pycache__/
+
+# local scratch DBs
+*.db
+*.sqlite
+
+# -----------------------
+# Logs
+# -----------------------
+logs/
+*.log
+
+# -----------------------
+# Environment files
+# (local + server prod)
+# -----------------------
+.env
+.env.*
+!.env.template      # keep a template tracked
+.env.local
+.env.dev
+.env.testing
+.env.docker
+.env.prod           # <-- stays untracked on server
+.env.production
+
+# backup envs
+*.env.backup
+*.env.bak
+
+# -----------------------
+# Docker
+# -----------------------
+docker-data/
+docker-compose.override.yml
+
+# -----------------------
+# Frontend (React / Vite)
+# -----------------------
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.idea/
+
+# -----------------------
+# Streamlit
+# -----------------------
+.streamlit/secrets.toml
+.streamlit/cache/
+.streamlit/storage/
+
+# -----------------------
+# Monitoring stack
+# -----------------------
+infra/monitoring/grafana/data/
+infra/monitoring/grafana/provisioning/dashboards/__pycache__/
+infra/monitoring/tmp/
+
+# Grafana - runtime volume mirror
+grafana_data/
+
+# Promtail positions
+/tmp/positions.yaml
+
+# -----------------------
+# Editor / OS files
+# -----------------------
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
