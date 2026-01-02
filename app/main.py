@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from prometheus_fastapi_instrumentator import Instrumentator  # 👈 NEW
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.startup.scraper_registry import register_scrapers
 from app.config import settings
@@ -19,7 +19,14 @@ app = FastAPI(
     description="Full API for gas, LNG, curves, shipping, and market analytics.",
 )
 
-# Celery tasks router only when enabled
+# --- Prometheus metrics ---
+Instrumentator().instrument(app).expose(
+    app,
+    endpoint="/metrics",         # Prometheus will scrape this
+    include_in_schema=False,     # don't show in /docs
+)
+
+# --- Celery tasks router (only when enabled) ---
 if settings.CELERY_ENABLED:
     from app.routers import tasks_router
     app.include_router(tasks_router, prefix="/tasks")
@@ -27,14 +34,7 @@ if settings.CELERY_ENABLED:
 # --- normal routers ---
 app.include_router(storage_router)
 app.include_router(auth_router)
-app.include_router(health_router)  # type: ignore
-
-# --- Prometheus metrics endpoint ---
-Instrumentator().instrument(app).expose(
-    app,
-    endpoint="/metrics",
-    tags=["Metrics"],
-)
+app.include_router(health_router)  
 
 origins = os.getenv("CORS_ORIGINS", "http://localhost").split(",")
 

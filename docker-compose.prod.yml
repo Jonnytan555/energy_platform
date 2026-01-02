@@ -1,31 +1,7 @@
+version: "3.9"
+
 services:
-  api:
-    image: ghcr.io/jonnytan555/energy_platform-api:latest
-    restart: unless-stopped
-    env_file:
-      - .env.prod
-    ports:
-      - "8000:8000"
-    command: >
-      uvicorn app.main:app
-      --host 0.0.0.0
-      --port 8000
-
-  worker:
-    image: ghcr.io/jonnytan555/energy_platform-worker:latest
-    restart: unless-stopped
-    env_file:
-      - .env.prod
-    depends_on:
-      - redis
-      - postgres
-
-  redis:
-    image: redis:7
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-
+  # --- Core data stores ---
   postgres:
     image: postgres:16
     restart: unless-stopped
@@ -35,6 +11,47 @@ services:
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  # --- API ---
+  api:
+    image: ghcr.io/jonnytan555/energy_platform/api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    depends_on:
+      - redis
+      - postgres
+    ports:
+      - "8000:8000"
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+
+  # --- Celery worker ---
+  worker:
+    image: ghcr.io/jonnytan555/energy_platform/worker:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    depends_on:
+      - redis
+      - postgres
+
+  # --- Nginx reverse proxy (so nginx-exporter has a target) ---
+  nginx:
+    image: ghcr.io/jonnytan555/energy_platform/nginx:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
 
   # --- Monitoring: Prometheus ---
   prometheus:
@@ -51,6 +68,7 @@ services:
       - node-exporter
     restart: unless-stopped
 
+  # --- Monitoring: Grafana ---
   grafana:
     image: grafana/grafana:11.3.0
     environment:
@@ -66,7 +84,7 @@ services:
       - prometheus
     restart: unless-stopped
 
-  # Host-level metrics (CPU, RAM, disk, net). Best on Linux host.
+  # --- Host-level metrics ---
   node-exporter:
     image: prom/node-exporter:v1.8.2
     command:
@@ -77,7 +95,7 @@ services:
       - "/:/host:ro,rslave"
     restart: unless-stopped
 
-  # Container metrics
+  # --- Container metrics ---
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.2
     ports:
@@ -89,7 +107,7 @@ services:
       - "/var/lib/docker/:/var/lib/docker:ro"
     restart: unless-stopped
 
-  # Nginx exporter -> Prometheus
+  # --- Nginx → Prometheus exporter ---
   nginx-exporter:
     image: nginx/nginx-prometheus-exporter:1.3.0
     command:
@@ -99,13 +117,15 @@ services:
     depends_on:
       - nginx
     restart: unless-stopped
-  
+
+  # --- Loki (logs) ---
   loki:
     image: grafana/loki:3.2.0
     ports:
       - "3100:3100"
     restart: unless-stopped
 
+  # --- Promtail (log shipper) ---
   promtail:
     image: grafana/promtail:3.2.0
     volumes:
