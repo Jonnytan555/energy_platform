@@ -44,7 +44,7 @@ services:
       - redis
       - postgres
 
-  # --- Nginx reverse proxy (so nginx-exporter has a target) ---
+  # --- Nginx reverse proxy ---
   nginx:
     image: ghcr.io/jonnytan555/energy_platform/nginx:${IMAGE_TAG:-latest}
     restart: unless-stopped

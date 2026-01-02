@@ -98,21 +98,10 @@ jobs:
 
       - name: Setup SSH key
         run: |
-          set -e
-
           mkdir -p ~/.ssh
-
-          # Write private key from GitHub secret
-          printf '%s\n' "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/deploy_key
+          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-
-          echo "Key file written:"
-          ls -la ~/.ssh
-
-          echo "Adding server to known_hosts (best-effort)..."
-          ssh-keyscan -T 10 -p "${{ secrets.PROD_SSH_PORT }}" \
-            "${{ secrets.PROD_SSH_HOST }}" >> ~/.ssh/known_hosts \
-            || echo "ssh-keyscan failed (non fatal)"
+          ssh-keyscan -p "${{ secrets.PROD_SSH_PORT }}" "${{ secrets.PROD_SSH_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Deploy via SSH
         env:
@@ -122,19 +111,30 @@ jobs:
               -o IdentitiesOnly=yes \
               -o StrictHostKeyChecking=no \
               -p "${{ secrets.PROD_SSH_PORT }}" \
-              "${{ secrets.PROD_SSH_USER }}"@"${{ secrets.PROD_SSH_HOST }}" bash << 'EOF'
-            set -e
+              "${{ secrets.PROD_SSH_USER }}"@"${{ secrets.PROD_SSH_HOST }}" \
+              "IMAGE_TAG=${IMAGE_TAG} bash -s" << 'EOF'
+            set -ex
 
             cd /home/jedwards1/energy_platform
 
+            # 🔄 pull latest compose + infra from GitHub
+            git fetch --all
+            git reset --hard origin/main
+
+            echo "Docker versions on server:"
+            docker --version || echo "docker not found"
+            docker-compose --version || echo "docker-compose not found"
+
+            echo "Using IMAGE_TAG=${IMAGE_TAG:-latest}"
+
             echo "Pulling images..."
-            docker compose -f docker-compose.prod.yml pull
+            docker-compose -f docker-compose.prod.yml pull
 
             echo "Starting services..."
-            docker compose -f docker-compose.prod.yml up -d
+            docker-compose -f docker-compose.prod.yml up -d
 
             echo "Running DB migrations..."
-            docker compose -f docker-compose.prod.yml run --rm api \
+            docker-compose -f docker-compose.prod.yml run --rm api \
               alembic upgrade head
 
             echo "Performing health check..."
@@ -142,4 +142,3 @@ jobs:
 
             echo "Deploy complete ✔"
           EOF
-
