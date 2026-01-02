@@ -4,7 +4,6 @@ from typing import List
 
 import os
 
-
 def _env_file():
     return os.getenv("ENV_FILE", ".env.local")
 
