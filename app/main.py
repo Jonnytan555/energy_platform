@@ -16,7 +16,7 @@ from app.routers import auth_router, health_router, storage_router, users_router
 app = FastAPI(
     title="Energy Analytics Platform",
     version="1.0.0",
-    description="Full API for gas, LNG, curves, shipping, and market analytics.",
+    description="Full API for scraping Energy Analytics data and providing it to clients",
 )
 
 # --- Prometheus metrics ---
