@@ -47,18 +47,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Optional React static mount (only if dist exists) ---
-FRONTEND_DIST = "frontend/dist"
-if os.path.isdir(FRONTEND_DIST):
-    app.mount(
-        "/web",
-        StaticFiles(directory=FRONTEND_DIST, html=True),
-        name="frontend",
-    )
-    print("✅ Mounted frontend from", FRONTEND_DIST)
-else:
-    print(f"ℹ️ Skipping static mount: {FRONTEND_DIST} not found in API image")
-
 @app.get("/")
 def root():
     return {"status": "ok", "message": "Energy Analytics Platform API running"}
