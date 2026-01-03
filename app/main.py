@@ -27,15 +27,16 @@ Instrumentator().instrument(app).expose(
 )
 
 # --- Celery tasks router (only when enabled) ---
-if settings.CELERY_ENABLED:
+if getattr(settings, "CELERY_ENABLED", False):
     from app.routers import tasks_router
     app.include_router(tasks_router, prefix="/tasks")
 
 # --- normal routers ---
 app.include_router(storage_router)
 app.include_router(auth_router)
-app.include_router(health_router)  
+app.include_router(health_router)
 
+# --- CORS ---
 origins = os.getenv("CORS_ORIGINS", "http://localhost").split(",")
 
 app.add_middleware(
@@ -46,12 +47,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount(
-    "/web",
-    StaticFiles(directory="frontend/dist", html=True),
-    name="frontend",
-)
-
+# --- Optional React static mount (only if dist exists) ---
+FRONTEND_DIST = "frontend/dist"
+if os.path.isdir(FRONTEND_DIST):
+    app.mount(
+        "/web",
+        StaticFiles(directory=FRONTEND_DIST, html=True),
+        name="frontend",
+    )
+    print("✅ Mounted frontend from", FRONTEND_DIST)
+else:
+    print(f"ℹ️ Skipping static mount: {FRONTEND_DIST} not found in API image")
 
 @app.get("/")
 def root():
