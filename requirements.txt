@@ -22,4 +22,5 @@ retry
 
 prometheus-client
 prometheus-fastapi-instrumentator
+python-multipart
 
