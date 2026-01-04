@@ -80,6 +80,7 @@ async def _fetch_agsi_timeseries(
     first_resp = await safe_get(BASE_URL, headers=headers, params=first_params)
     first_json = first_resp.json()
 
+
     last_page = first_json.get("last_page", 1)
     logger.info("AGSI zone=%s discovered last_page=%s", zone, last_page)
 
